@@ -1,56 +1,99 @@
-from sklearn.neural_network import MLPRegressor
-from sklearn.preprocessing import StandardScaler
-from sklearn.impute import SimpleImputer
 import pandas as pd
+import numpy as np
+from sklearn.impute import SimpleImputer
 
-train_df = pd.read_csv('../Data-Sets/results_train.csv') #données d'entrainements
-test_df = pd.read_csv('../Data-Sets/results_test.csv') #données de tests
-geo = pd.read_csv('../Data-Sets/swiss_communes_geodata.csv') #latitude and longitude of each commune.
-demo = pd.read_excel("../Data-Sets/je-e-21.03.01.xlsx", header=5) #demographic, geographic, economic, and voting data about each Swisscommune in 2018
-demo = demo.drop(0) # la ligne 7 ne contient que des dates
-income = pd.read_excel("../Data-Sets/statistik-dbst-np-kennzahlen-mit-2017-fr.xlsx") #income data for each Swiss com-mune in 2017.
-prev_ref = pd.read_excel("../Data-Sets/622.00-result-by-canton-district-and-municipality.xlsx") #results of a previous ref-erendum “Initiative for food sovereignty”
+#fonction :
+def clean_and_format_id(df, column_name):
+    # 1. Conversion en numérique (force les erreurs en NaN)
+    df[column_name] = pd.to_numeric(df[column_name], errors='coerce')
+    # 2. Suppression des lignes où le numéro de commune est invalide (NaN)
+    df = df.dropna(subset=[column_name]).copy()
+    # 3. Création de la colonne 'Id' (passage par int pour retirer le .0 si c'est du float, puis str)
+    df['Id'] = df[column_name].astype(int).astype(str)
+    return df
 
-#------------ On prepare les cols Id = numero de comunes
+
+#training and test set :
+train_df = pd.read_csv("../Data-Sets/results_train.csv")
+test_df = pd.read_csv("../Data-Sets/results_test.csv")
+
+# On ajoute une colone id qui est egale au numero de commune
 train_df['Id'] = train_df['Gemeinde-Nummer'].astype(str)
 test_df['Id'] = test_df['Gemeinde-Nummer'].astype(str)
 
-TARGET = 'Ja in Prozent'
+#on load : Other referundum -------------------
+file_622 = "../Data-Sets/622.00-result-by-canton-district-and-municipality.xlsx"
+df_622 = pd.read_excel(file_622, sheet_name="Gemeinden", header=5)
+df_622.columns = df_622.columns.str.strip()
 
-#On enleve ces collones car elles correspondent au details des votes, on pourrait deduire la target juste avec des calculs
-Leakage_cols = ['eingelegte Stimmzettel','Stimmbeteiligung','leere Stimmzettel', 'ungültige Stimmzettel', 'gültige Stimmen', 'Ja-Stimmen', 'Nein-Stimmen']
+df_622 = clean_and_format_id(df_622, 'Gemeinde-Nummer')
 
-Y_train = train_df[TARGET].copy()
-train_df = train_df.drop(columns = Leakage_cols + [TARGET])
+df_622 = df_622.add_suffix('_622')
+df_622 = df_622.rename(columns={'Id_622': 'Id'}) # pour la fusion apres
+df_622 = df_622.drop(columns=['Gemeinde-Nummer_622', 'Gemeinde_622', 'Kanton_622'])
 
-#On supprimer les communes et les kanton car on a deja leurs numéro
-#Peut etre faire un one hot encoder pour eviter que commune 1 < commune 2 ?
+#on load : "portrait of communes" = jee
+file_jee = "../Data-Sets/je-e-21.03.01.xlsx"
+df_jee = pd.read_excel(file_jee, sheet_name="Schweiz - Gemeinden", header=5)
 
-train = train.drop(columns = ['Kanton', 'Gemeinde'])
-test = test.drop(columns = ['Kanton', 'Gemeinde'])
-
-#on supprimer les noms de commune et on unifie les noms entre geo et train
-geo = geo.drop(columns = 'municipalityLabel')
-geo = geo.rename(columns = {'bfs_id':'Gemeinde-Nummer'})
-#on fusionne geo et train (inner pour ne pas garder les nan):
-train = train.merge(geo, on = 'Gemeinde-Nummer', how = 'left')
-test = test.merge(geo, on = 'Gemeinde-Nummer', how = 'left')
-
-#traitement demo :
-demo = demo.rename(columns={'Number of commune' :'Gemeinde-Nummer' })
-demo = demo.drop(columns = ['Name of commune'])
-pd.set_option('display.max_columns', None)
-#print(train.info())
-#print(test.info())
-print(demo.info())
-print(demo.head)
+#clean id
+df_jee = clean_and_format_id(df_jee, 'Number of commune')
+df_jee = df_jee.drop(columns=['Number of commune', 'Name of commune'])
 
 
+# On force les cols a être des chiffres :
+for col in df_jee.columns:
+    if col != 'Id':
+        df_jee[col] = pd.to_numeric(df_jee[col], errors='coerce')
+
+
+#on load: geoData:--------------
+file_geo = "../Data-Sets/swiss_communes_geodata.csv"
+df_geo = pd.read_csv(file_geo)
+
+#clean id
+df_geo = clean_and_format_id(df_geo, 'bfs_id')
+df_geo = df_geo.drop(columns=['bfs_id', 'municipalityLabel'])
+
+#on load : income data for each Swiss com-mune in 2017-----------
+file_income = "../Data-Sets/statistik-dbst-np-kennzahlen-mit-2017-fr.xlsx"
+df_income = pd.read_excel(file_income,sheet_name='Gemeinden - Communes')
+
+df_income = clean_and_format_id(df_income, 'gdenr')
+df_income = df_income.drop(columns=['ktname', 'gdename', 'Einheit'])
+df_income = df_income.add_suffix('_income')
+df_income = df_income.rename(columns={'Id_income': 'Id'})
+
+for col in df_income.columns:
+    if col != 'Id':
+        df_income[col] = pd.to_numeric(df_income[col], errors='coerce')
 
 
 
 
+# Merge datasets
+train_merged = train_df.merge(df_622, on='Id', how='left').merge(df_jee, on='Id', how='left').merge(df_income, on='Id', how='left').merge(df_geo, on='Id', how='left')
+test_merged = test_df.merge(df_622, on='Id', how='left').merge(df_jee, on='Id', how='left').merge(df_income, on='Id', how='left').merge(df_geo, on='Id', how='left')
 
+# Define target variable
+y_train = train_merged['Ja in Prozent']
 
+leakage_columns = [
+    'eingelegte Stimmzettel', 'Stimmbeteiligung', 'leere Stimmzettel',
+    'ungültige Stimmzettel', 'gültige Stimmen', 'Ja-Stimmen', 'Nein-Stimmen', 'Ja in Prozent'
+]
+
+# Select only number columns and remove voting results
+X_train_raw = train_merged.select_dtypes(include=[np.number]).drop(columns=[c for c in leakage_columns if c in train_merged.columns])
+
+# Ensure test set has exactly the same feature columns
+X_test_raw = test_merged[X_train_raw.columns]
+
+# Impute missing values (replace NaNs with mean of the column)
+imputer = SimpleImputer(strategy='mean')
+X_train = imputer.fit_transform(X_train_raw)
+X_test = imputer.transform(X_test_raw)
+
+print(f"Training shape: {X_train.shape}, test shape: {X_test.shape}")
 
 
