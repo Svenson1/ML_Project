@@ -2,7 +2,7 @@ import pandas as pd
 import numpy as np
 from sklearn.feature_selection import SelectKBest, f_regression
 from sklearn.impute import SimpleImputer
-from sklearn.model_selection import cross_val_predict, cross_val_score, GridSearchCV
+from sklearn.model_selection import cross_val_predict, cross_val_score, GridSearchCV, RandomizedSearchCV
 from sklearn.neural_network import MLPRegressor
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
@@ -117,32 +117,30 @@ pipeline = Pipeline([('imputer', SimpleImputer(strategy='median')),
                          hidden_layer_sizes=(128, 64),
                          activation="relu",
                          solver="adam",
-                         max_iter=1000,
+                         max_iter=2000,
                          random_state=42,
                          early_stopping=True,
                          validation_fraction=0.1,
-                         n_iter_no_change=10,
+                         n_iter_no_change=5,
                      ))])
 
 #Eval -------------- With grid search
 param_grid = {
-    'selector__k': [20, 30, 40, 50, 80, 'all'],
+    'selector__k': [20, 30, 40, 50],
     'mlp__hidden_layer_sizes': [
-        (64,),          # 1 couche légère
         (128,),         # 1 couche moyenne
         (128, 64),      # 2 couches (ta config actuelle)
         (128, 64, 32),  # 3 couches
         (256, 128),
-        (256, 128, 64)
     ],
-    'mlp__activation': ['relu', 'tanh', 'logistic'],
-    'mlp__solver': ['adam', 'sgd'],
-    'mlp__alpha': [0.0001, 0.001, 0.01, 0.05, 0.1, 0.5],
-    'mlp__learning_rate_init': [0.0001, 0.001],
+    'mlp__activation': ['tanh'],
+    'mlp__solver': ['sgd'],
+    'mlp__alpha': [0.1, 0.5, 1.0],
+    'mlp__learning_rate_init': [0.0005, 0.001, 0.005],
 }
 
 
-grid_search = GridSearchCV(pipeline, param_grid=param_grid, cv=10, scoring='neg_root_mean_squared_error', n_jobs=-1, verbose=2)
+grid_search = RandomizedSearchCV(pipeline, param_distributions=param_grid,n_iter= 200,  cv=5, scoring='neg_root_mean_squared_error', n_jobs=-1, verbose=2)
 grid_search.fit(X_train_raw, y_train)
 
 print(f"\nMeilleurs paramètres : {grid_search.best_params_}")
