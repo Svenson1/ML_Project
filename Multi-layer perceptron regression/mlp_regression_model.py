@@ -1,6 +1,11 @@
 import pandas as pd
 import numpy as np
 from sklearn.impute import SimpleImputer
+from sklearn.model_selection import cross_val_predict, cross_val_score
+from sklearn.neural_network import MLPRegressor
+from sklearn.pipeline import Pipeline
+from sklearn.preprocessing import StandardScaler
+
 
 #fonction :
 def clean_and_format_id(df, column_name):
@@ -89,11 +94,30 @@ X_train_raw = train_merged.select_dtypes(include=[np.number]).drop(columns=[c fo
 # Ensure test set has exactly the same feature columns
 X_test_raw = test_merged[X_train_raw.columns]
 
-# Impute missing values (replace NaNs with mean of the column)
-imputer = SimpleImputer(strategy='mean')
-X_train = imputer.fit_transform(X_train_raw)
-X_test = imputer.transform(X_test_raw)
+print(f"Features : {X_train_raw.shape[1]} colonnes")
+print(f"NaN dans X_train : {X_train_raw.isna().sum().sum()}")
+print(f"Train: {X_train_raw.shape} | Test: {X_test_raw.shape}")
 
-print(f"Training shape: {X_train.shape}, test shape: {X_test.shape}")
+# Impute missing values (replace NaNs with mean of the column)
+#On fait ça via un pipeline :
+#scaler obligatoire pour mlp
+pipeline = Pipeline([('imputer', SimpleImputer(strategy='median')),
+                     ('scaler', StandardScaler()),
+                     ('mlp', MLPRegressor(
+                         hidden_layer_sizes=(128, 64),
+                         activation="relu",
+                         solver="adam",
+                         max_iter=1000,
+                         random_state=42,
+                         early_stopping=True,
+                         validation_fraction=0.1,
+                         n_iter_no_change=10,
+                     ))])
+
+#Eval --------------
+scores = cross_val_score(pipeline, X_train_raw, y_train, cv=5, scoring='neg_root_mean_squared_error')
+
+print(f"\nRMSE CV : {-scores.mean():.3f} ± {scores.std():.3f}")
+
 
 
