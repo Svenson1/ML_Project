@@ -1,5 +1,6 @@
 import pandas as pd
 import numpy as np
+from sklearn.feature_selection import SelectKBest, f_regression
 from sklearn.impute import SimpleImputer
 from sklearn.model_selection import cross_val_predict, cross_val_score, GridSearchCV
 from sklearn.neural_network import MLPRegressor
@@ -111,6 +112,7 @@ print(f"Train: {X_train_raw.shape} | Test: {X_test_raw.shape}")
 #scaler obligatoire pour mlp
 pipeline = Pipeline([('imputer', SimpleImputer(strategy='median')),
                      ('scaler', StandardScaler()),
+                     ('selector', SelectKBest(score_func=f_regression)),
                      ('mlp', MLPRegressor(
                          hidden_layer_sizes=(128, 64),
                          activation="relu",
@@ -124,24 +126,28 @@ pipeline = Pipeline([('imputer', SimpleImputer(strategy='median')),
 
 #Eval -------------- With grid search
 param_grid = {
+    'selector__k': [20, 30, 40, 50, 80, 'all'],
     'mlp__hidden_layer_sizes': [
         (64,),          # 1 couche légère
         (128,),         # 1 couche moyenne
         (128, 64),      # 2 couches (ta config actuelle)
         (128, 64, 32),  # 3 couches
-        (256, 128),     # 2 couches plus larges
+        (256, 128),
+        (256, 128, 64)
     ],
-    'mlp__activation': ['relu', 'tanh'],
-    'mlp__alpha': [0.0001, 0.001, 0.01],
+    'mlp__activation': ['relu', 'tanh', 'logistic'],
+    'mlp__solver': ['adam', 'sgd'],
+    'mlp__alpha': [0.0001, 0.001, 0.01, 0.05, 0.1, 0.5],
     'mlp__learning_rate_init': [0.0001, 0.001],
 }
 
 
-grid_search = GridSearchCV(pipeline, param_grid=param_grid, cv=5, scoring='neg_root_mean_squared_error', n_jobs=-1, verbose=2)
+grid_search = GridSearchCV(pipeline, param_grid=param_grid, cv=10, scoring='neg_root_mean_squared_error', n_jobs=-1, verbose=2)
 grid_search.fit(X_train_raw, y_train)
 
 print(f"\nMeilleurs paramètres : {grid_search.best_params_}")
 print(f"Meilleur RMSE CV    : {-grid_search.best_score_:.3f}")
+
 
 # Afficher le top 5 des configurations
 results = pd.DataFrame(grid_search.cv_results_)
