@@ -97,11 +97,15 @@ leakage_columns = [
     'ungültige Stimmzettel', 'gültige Stimmen', 'Ja-Stimmen', 'Nein-Stimmen', 'Ja in Prozent'
 ]
 
+
+
+
 # Select only number columns and remove voting results
 X_train_raw = train_merged.select_dtypes(include=[np.number]).drop(columns=[c for c in leakage_columns if c in train_merged.columns])
 
 # Ensure test set has exactly the same feature columns
 X_test_raw = test_merged[X_train_raw.columns]
+
 
 print(f"Features : {X_train_raw.shape[1]} colonnes")
 print(f"NaN dans X_train : {X_train_raw.isna().sum().sum()}")
@@ -126,21 +130,30 @@ pipeline = Pipeline([('imputer', SimpleImputer(strategy='median')),
 
 #Eval -------------- With grid search
 param_grid = {
-    'selector__k': [20, 30, 40, 50],
+    'selector__k': [40, 50, 60, 'all'],
     'mlp__hidden_layer_sizes': [
-        (128,),         # 1 couche moyenne
-        (128, 64),      # 2 couches (ta config actuelle)
-        (128, 64, 32),  # 3 couches
         (256, 128),
+        (256, 128, 64),
+        (512, 256),
     ],
     'mlp__activation': ['tanh'],
     'mlp__solver': ['sgd'],
-    'mlp__alpha': [0.1, 0.5, 1.0],
-    'mlp__learning_rate_init': [0.0005, 0.001, 0.005],
+    'mlp__alpha': [0.5, 1.0, 2.0, 5.0],
+    'mlp__learning_rate_init': [0.0005, 0.001, 0.002],
+    'mlp__momentum': [0.8, 0.9, 0.95],
 }
 
 
-grid_search = RandomizedSearchCV(pipeline, param_distributions=param_grid,n_iter= 200,  cv=5, scoring='neg_root_mean_squared_error', n_jobs=-1, verbose=2)
+grid_search = RandomizedSearchCV(
+    pipeline,
+    param_distributions=param_grid,
+    n_iter=100,
+    cv=5,
+    scoring='neg_root_mean_squared_error',
+    n_jobs=-1,
+    random_state=42,
+    verbose=2
+)
 grid_search.fit(X_train_raw, y_train)
 
 print(f"\nMeilleurs paramètres : {grid_search.best_params_}")
@@ -160,6 +173,15 @@ print(top5[['params', 'RMSE', 'std']].to_string(index=False))
 # Le best_estimator_ est déjà fitté sur tout X_train_raw
 best_pipeline = grid_search.best_estimator_
 predictions = np.clip(best_pipeline.predict(X_test_raw), 0, 100) #on clip pour rester entre 0-100
+selector      = best_pipeline.named_steps['selector']
+k             = grid_search.best_params_['selector__k']
+
+if k != 'all':
+    selected = X_train_raw.columns[selector.get_support()].tolist()
+    scores   = selector.scores_[selector.get_support()]
+    feat_df  = pd.DataFrame({'feature': selected, 'score': scores})
+    feat_df  = feat_df.sort_values('score', ascending=False)
+    print(feat_df.to_string(index=False))
 
 submission = pd.DataFrame({
     'Id': test_merged['Id'],
