@@ -119,12 +119,8 @@ dummies_train, dummies_test = dummies_train.align(dummies_test, join='left', axi
 train_merged = pd.concat([train_merged, dummies_train], axis=1)
 test_merged  = pd.concat([test_merged, dummies_test], axis=1)
 
-#allignement des cols
-dummies_train, dummies_test = dummies_train.align(dummies_test, join='left', axis=1, fill_value=0)
 
-train_merged = pd.concat([train_merged, dummies_train], axis=1)
 
-test_merged  = pd.concat([test_merged, dummies_test], axis=1)
 
 
 # Select only number columns and remove voting results
