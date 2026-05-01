@@ -1,6 +1,6 @@
 import pandas as pd
 import numpy as np
-from sklearn.feature_selection import SelectKBest, f_regression
+from sklearn.feature_selection import SelectKBest, f_regression, mutual_info_regression
 from sklearn.impute import SimpleImputer
 from sklearn.model_selection import cross_val_predict, cross_val_score, GridSearchCV, RandomizedSearchCV
 from sklearn.neural_network import MLPRegressor
@@ -98,6 +98,33 @@ leakage_columns = [
 ]
 
 
+################################################################################
+#Modifications apres analyse des données :
+################################################################################
+#on supprime car >50% de nan
+train_merged.drop(columns=['PdA/Sol.'])
+test_merged.drop(columns=['PdA/Sol.'])
+
+#on supprime car coolinearitée :
+train_merged.drop(columns=['Settlement and urban area in %'])
+test_merged.drop(columns=['Settlement and urban area in %'])
+
+#on encode les Kantons avec one hot :
+dummies_train = pd.get_dummies(train_merged['Kantons-Nummer'], drop_first=True)
+dummies_test  = pd.get_dummies(test_merged['Kantons-Nummer'], drop_first=True)
+
+# aligner les colonnes
+dummies_train, dummies_test = dummies_train.align(dummies_test, join='left', axis=1, fill_value=0)
+
+train_merged = pd.concat([train_merged, dummies_train], axis=1)
+test_merged  = pd.concat([test_merged, dummies_test], axis=1)
+
+#allignement des cols
+dummies_train, dummies_test = dummies_train.align(dummies_test, join='left', axis=1, fill_value=0)
+
+train_merged = pd.concat([train_merged, dummies_train], axis=1)
+
+test_merged  = pd.concat([test_merged, dummies_test], axis=1)
 
 
 # Select only number columns and remove voting results
@@ -114,33 +141,54 @@ print(f"Train: {X_train_raw.shape} | Test: {X_test_raw.shape}")
 # Impute missing values (replace NaNs with mean of the column)
 #On fait ça via un pipeline :
 #scaler obligatoire pour mlp
-pipeline = Pipeline([('imputer', SimpleImputer(strategy='median')),
-                     ('scaler', StandardScaler()),
-                     ('selector', SelectKBest(score_func=f_regression)),
-                     ('mlp', MLPRegressor(
-                         hidden_layer_sizes=(128, 64),
-                         activation="relu",
-                         solver="adam",
-                         max_iter=2000,
-                         random_state=42,
-                         early_stopping=True,
-                         validation_fraction=0.1,
-                         n_iter_no_change=5,
-                     ))])
+pipeline = Pipeline([
+    ('imputer',  SimpleImputer(strategy='median')),
+    ('scaler',   StandardScaler()),
+    ('selector', SelectKBest(score_func=mutual_info_regression)),
+    ('mlp',      MLPRegressor(
+        max_iter=3000,
+        random_state=42,
+        early_stopping=True,
+        validation_fraction=0.1,
+        n_iter_no_change=10,
+    )),
+])
 
 #Eval -------------- With grid search
 param_grid = {
-    'selector__k': [40, 50, 60, 'all'],
+    # Feature selection
+    'selector__k': [40, 60, 70, 'all'],
+    # Architecture du réseau
     'mlp__hidden_layer_sizes': [
+        (128,),
+        (256,),
+        (128, 64),
         (256, 128),
         (256, 128, 64),
-        (512, 256),
     ],
-    'mlp__activation': ['tanh'],
-    'mlp__solver': ['sgd'],
-    'mlp__alpha': [0.5, 1.0, 2.0, 5.0],
-    'mlp__learning_rate_init': [0.0005, 0.001, 0.002],
-    'mlp__momentum': [0.8, 0.9, 0.95],
+    # Activation (tanh souvent meilleur que relu sur données tabulaires)
+    'mlp__activation': ['tanh', 'relu'],
+    'mlp__solver': ['adam'],
+     # Régularisation (TRÈS important, bien réglé ici)
+    'mlp__alpha': [
+        1e-5,
+        1e-4,
+        1e-3,
+        1e-2,
+        1e-1
+    ],
+    # Learning rate
+    'mlp__learning_rate_init': [
+        0.0005,
+        0.001,
+        0.002
+    ],
+    # Batch size (important pour convergence)
+    'mlp__batch_size': [
+        32,
+        64,
+        128
+    ],
 }
 
 
@@ -148,11 +196,11 @@ grid_search = RandomizedSearchCV(
     pipeline,
     param_distributions=param_grid,
     n_iter=100,
-    cv=5,
+    cv=7,
     scoring='neg_root_mean_squared_error',
     n_jobs=-1,
     random_state=42,
-    verbose=2
+    verbose=2,
 )
 grid_search.fit(X_train_raw, y_train)
 
