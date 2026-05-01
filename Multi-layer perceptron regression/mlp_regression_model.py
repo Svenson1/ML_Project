@@ -163,7 +163,7 @@ pipeline = Pipeline([
 #Eval -------------- With grid search
 param_grid = {
     # Feature selection
-    'selector__k': [40,50,60,70,80,90, 'all'],
+    'selector__k': [50,60,70,80,'all'],
     # Architecture du réseau
     'mlp__hidden_layer_sizes': [
         (128,),
@@ -202,7 +202,7 @@ grid_search = RandomizedSearchCV(
     pipeline,
     param_distributions=param_grid,
     n_iter=100,
-    cv=7,
+    cv=9,
     scoring='neg_root_mean_squared_error',
     n_jobs=-1,
     random_state=42,
