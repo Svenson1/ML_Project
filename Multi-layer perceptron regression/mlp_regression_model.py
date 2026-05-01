@@ -27,6 +27,9 @@ test_df = pd.read_csv("../Data-Sets/results_test.csv")
 train_df['Id'] = train_df['Gemeinde-Nummer'].astype(str)
 test_df['Id'] = test_df['Gemeinde-Nummer'].astype(str)
 
+train_df = train_df.drop(columns=['Gemeinde-Nummer'])
+test_df = test_df.drop(columns=['Gemeinde-Nummer'])
+
 #on load : Other referundum -------------------
 file_622 = "../Data-Sets/622.00-result-by-canton-district-and-municipality.xlsx"
 df_622 = pd.read_excel(file_622, sheet_name="Gemeinden", header=5)
@@ -118,6 +121,9 @@ dummies_train, dummies_test = dummies_train.align(dummies_test, join='left', axi
 
 train_merged = pd.concat([train_merged, dummies_train], axis=1)
 test_merged  = pd.concat([test_merged, dummies_test], axis=1)
+
+train_merged = train_merged.drop(columns=['Kantons-Nummer'])
+test_merged = test_merged.drop(columns=['Kantons-Nummer'])
 
 
 
