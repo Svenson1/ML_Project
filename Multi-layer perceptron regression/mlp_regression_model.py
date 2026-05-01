@@ -113,8 +113,12 @@ train_merged = train_merged.drop(columns=['Settlement and urban area in %'])
 test_merged = test_merged.drop(columns=['Settlement and urban area in %'])
 
 #on encode les Kantons avec one hot :
-dummies_train = pd.get_dummies(train_merged['Kantons-Nummer'], drop_first=True)
-dummies_test  = pd.get_dummies(test_merged['Kantons-Nummer'], drop_first=True)
+dummies_train = pd.get_dummies(train_merged['Kantons-Nummer'], prefix='canton',
+    drop_first=True,
+    dtype=int )
+dummies_test  = pd.get_dummies(test_merged['Kantons-Nummer'], prefix='canton',
+    drop_first=True,
+    dtype=int)
 
 # aligner les colonnes
 dummies_train, dummies_test = dummies_train.align(dummies_test, join='left', axis=1, fill_value=0)
@@ -159,7 +163,7 @@ pipeline = Pipeline([
 #Eval -------------- With grid search
 param_grid = {
     # Feature selection
-    'selector__k': [40,50,60,70, 'all'],
+    'selector__k': [40,50,60,70,80,90, 'all'],
     # Architecture du réseau
     'mlp__hidden_layer_sizes': [
         (128,),
