@@ -105,12 +105,12 @@ leakage_columns = [
 #Modifications apres analyse des données :
 ################################################################################
 #on supprime car >50% de nan
-train_merged.drop(columns=['PdA/Sol.'])
-test_merged.drop(columns=['PdA/Sol.'])
+train_merged = train_merged.drop(columns=['PdA/Sol.'])
+test_merged = test_merged.drop(columns=['PdA/Sol.'])
 
 #on supprime car coolinearitée :
-train_merged.drop(columns=['Settlement and urban area in %'])
-test_merged.drop(columns=['Settlement and urban area in %'])
+train_merged = train_merged.drop(columns=['Settlement and urban area in %'])
+test_merged = test_merged.drop(columns=['Settlement and urban area in %'])
 
 #on encode les Kantons avec one hot :
 dummies_train = pd.get_dummies(train_merged['Kantons-Nummer'], drop_first=True)
@@ -159,7 +159,7 @@ pipeline = Pipeline([
 #Eval -------------- With grid search
 param_grid = {
     # Feature selection
-    'selector__k': [40, 60, 70, 'all'],
+    'selector__k': [40,50,60,70, 'all'],
     # Architecture du réseau
     'mlp__hidden_layer_sizes': [
         (128,),
@@ -168,10 +168,10 @@ param_grid = {
         (256, 128),
         (256, 128, 64),
     ],
-    # Activation (tanh souvent meilleur que relu sur données tabulaires)
-    'mlp__activation': ['tanh', 'relu'],
+    # Activation
+    'mlp__activation': ['tanh'],
     'mlp__solver': ['adam'],
-     # Régularisation (TRÈS important, bien réglé ici)
+     # Régularisation
     'mlp__alpha': [
         1e-5,
         1e-4,
