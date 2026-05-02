@@ -10,6 +10,11 @@ from sklearn.preprocessing import StandardScaler
 
 #fonction :
 def clean_and_format_id(df, column_name):
+    """
+    :param df: The initial DataFrame
+    :param column_name: The name of the column
+    :return: the cleaned DataFrame with the format ID
+    """
     # 1. Conversion en numérique (force les erreurs en NaN)
     df[column_name] = pd.to_numeric(df[column_name], errors='coerce')
     # 2. Suppression des lignes où le numéro de commune est invalide (NaN)
@@ -42,6 +47,8 @@ df_622 = df_622.add_suffix('_622')
 df_622 = df_622.rename(columns={'Id_622': 'Id'}) # pour la fusion apres
 df_622 = df_622.drop(columns=['Gemeinde-Nummer_622', 'Gemeinde_622', 'Kanton_622'])
 
+
+
 #on load : "portrait of communes" = jee
 file_jee = "../Data-Sets/je-e-21.03.01.xlsx"
 df_jee = pd.read_excel(file_jee, sheet_name="Schweiz - Gemeinden", header=5)
@@ -51,11 +58,11 @@ df_jee = clean_and_format_id(df_jee, 'Number of commune')
 df_jee = df_jee.drop_duplicates(subset=['Id'])
 df_jee = df_jee.drop(columns=['Number of commune', 'Name of commune'])
 
-
 # On force les cols a être des chiffres :
 for col in df_jee.columns:
     if col != 'Id':
         df_jee[col] = pd.to_numeric(df_jee[col], errors='coerce')
+
 
 
 #on load: geoData:--------------
@@ -66,6 +73,8 @@ df_geo = pd.read_csv(file_geo)
 df_geo = clean_and_format_id(df_geo, 'bfs_id')
 df_geo = df_geo.drop_duplicates(subset=['Id'])
 df_geo = df_geo.drop(columns=['bfs_id', 'municipalityLabel'])
+
+
 
 #on load : income data for each Swiss com-mune in 2017-----------
 file_income = "../Data-Sets/statistik-dbst-np-kennzahlen-mit-2017-fr.xlsx"
@@ -92,14 +101,6 @@ print(f"Doublons dans train_merged : {train_merged['Id'].duplicated().sum()}")
 print(f"Doublons dans test_merged  : {test_merged['Id'].duplicated().sum()}")
 
 
-# Define target variable
-y_train = train_merged['Ja in Prozent']
-
-leakage_columns = [
-    'eingelegte Stimmzettel', 'Stimmbeteiligung', 'leere Stimmzettel',
-    'ungültige Stimmzettel', 'gültige Stimmen', 'Ja-Stimmen', 'Nein-Stimmen', 'Ja in Prozent'
-]
-
 
 ################################################################################
 #Modifications apres analyse des données :
@@ -112,6 +113,21 @@ test_merged = test_merged.drop(columns=['PdA/Sol.'])
 train_merged = train_merged.drop(columns=['Settlement and urban area in %'])
 test_merged = test_merged.drop(columns=['Settlement and urban area in %'])
 
+# Colonnes identifiants income sans valeur prédictive
+train_merged = train_merged.drop(columns=['gdenr_income', 'ktnr_income'], errors='ignore')
+test_merged  = test_merged.drop(columns=['gdenr_income', 'ktnr_income'],  errors='ignore')
+
+# gestion des partis politique en nan, nan = parti absent donc valeur = 0
+party_cols = ['SVP', 'SP', 'GPS', 'CVP', 'FDP/PLR 2)', 'GLP', 'BDP',
+              'EVP/CSP', 'Small right-wing parties']
+for col in party_cols:
+    if col in train_merged.columns:
+        train_merged[col] = train_merged[col].fillna(0)
+        test_merged[col]  = test_merged[col].fillna(0)
+
+
+# Define target variable
+y_train = train_merged['Ja in Prozent']
 #on encode les Kantons avec one hot :
 dummies_train = pd.get_dummies(train_merged['Kantons-Nummer'], prefix='canton',
     drop_first=True,
@@ -132,6 +148,11 @@ test_merged = test_merged.drop(columns=['Kantons-Nummer'])
 
 
 
+
+leakage_columns = [
+    'eingelegte Stimmzettel', 'Stimmbeteiligung', 'leere Stimmzettel',
+    'ungültige Stimmzettel', 'gültige Stimmen', 'Ja-Stimmen', 'Nein-Stimmen', 'Ja in Prozent'
+]
 
 # Select only number columns and remove voting results
 X_train_raw = train_merged.select_dtypes(include=[np.number]).drop(columns=[c for c in leakage_columns if c in train_merged.columns])
