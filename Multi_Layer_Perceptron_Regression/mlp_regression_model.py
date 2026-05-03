@@ -30,8 +30,8 @@ def clean_and_format_id(df, column_name):
 
 
 #training and test set :
-train_df = pd.read_csv("../Data-Sets/results_train.csv")
-test_df = pd.read_csv("../Data-Sets/results_test.csv")
+train_df = pd.read_csv("../Data_Sets/results_train.csv")
+test_df = pd.read_csv("../Data_Sets/results_test.csv")
 train_df['Id'] = train_df['Gemeinde-Nummer'].astype(str)# On ajoute une colone id qui est egale au numero de commune
 test_df['Id'] = test_df['Gemeinde-Nummer'].astype(str)
 train_df = train_df.drop(columns=['Gemeinde-Nummer'])
@@ -39,7 +39,7 @@ test_df = test_df.drop(columns=['Gemeinde-Nummer'])
 
 
 #Other referundum = 622
-file_622 = "../Data-Sets/622.00-result-by-canton-district-and-municipality.xlsx"
+file_622 = "../Data_Sets/622.00-result-by-canton-district-and-municipality.xlsx"
 df_622 = pd.read_excel(file_622, sheet_name="Gemeinden", header=5)
 df_622.columns = df_622.columns.str.strip()
 df_622 = clean_and_format_id(df_622, 'Gemeinde-Nummer')
@@ -50,7 +50,7 @@ df_622 = df_622.drop(columns=['Gemeinde-Nummer_622', 'Gemeinde_622', 'Kanton_622
 
 
 #portrait of communes = jee
-file_jee = "../Data-Sets/je-e-21.03.01.xlsx"
+file_jee = "../Data_Sets/je-e-21.03.01.xlsx"
 df_jee = pd.read_excel(file_jee, sheet_name="Schweiz - Gemeinden", header=5)
 df_jee = clean_and_format_id(df_jee, 'Number of commune')
 df_jee = df_jee.drop_duplicates(subset=['Id'])
@@ -62,7 +62,7 @@ for col in df_jee.columns:
 
 
 #geoData
-file_geo = "../Data-Sets/swiss_communes_geodata.csv"
+file_geo = "../Data_Sets/swiss_communes_geodata.csv"
 df_geo = pd.read_csv(file_geo)
 df_geo = clean_and_format_id(df_geo, 'bfs_id')
 df_geo = df_geo.drop_duplicates(subset=['Id'])
@@ -71,7 +71,7 @@ df_geo = df_geo.drop(columns=['bfs_id', 'municipalityLabel'])
 
 
 #income data for each Swiss com-mune in 2017
-file_income = "../Data-Sets/statistik-dbst-np-kennzahlen-mit-2017-fr.xlsx"
+file_income = "../Data_Sets/statistik-dbst-np-kennzahlen-mit-2017-fr.xlsx"
 df_income = pd.read_excel(file_income,sheet_name='Gemeinden - Communes')
 df_income = clean_and_format_id(df_income, 'gdenr')
 df_income = df_income.drop_duplicates(subset=['Id'])

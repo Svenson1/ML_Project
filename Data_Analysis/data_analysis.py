@@ -23,7 +23,7 @@ import warnings
 
 warnings.filterwarnings("ignore")
 
-DATA_DIR = "../Data-Sets/"
+DATA_DIR = "../Data_Sets/"
 TARGET   = "Ja in Prozent"
 
 # Colonnes de leakage : ce sont d'AUTRES résultats du MÊME référendum.
