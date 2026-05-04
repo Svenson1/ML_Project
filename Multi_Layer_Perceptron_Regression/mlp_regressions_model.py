@@ -185,7 +185,7 @@ pipeline = Pipeline([
     ('scaler',   StandardScaler()),
     ('selector', SelectKBest(score_func=mutual_info_regression)),
     ('mlp',      MLPRegressor(
-        max_iter=3000,
+        max_iter=4000,
         random_state=42,
         early_stopping=True,
         validation_fraction=0.1,
@@ -214,11 +214,8 @@ param_grid = {
     'mlp__solver': ['adam'],
      # Régularisation
     'mlp__alpha': [
-        1e-5,
-        1e-4,
-        1e-3,
-        1e-2,
-        1e-1
+        3,
+        5,
     ],
     # Learning rate
     'mlp__learning_rate_init': [
@@ -239,7 +236,7 @@ grid_search = RandomizedSearchCV(
     pipeline,
     param_distributions=param_grid,
     n_iter=100,
-    cv=9,
+    cv=5,
     scoring='neg_root_mean_squared_error',
     n_jobs=-1,
     random_state=42,
@@ -288,3 +285,5 @@ submission.to_csv('submission_mlp.csv', index=False)
 print("Submission sauvegardée.")
 
 print(submission.head())
+
+
