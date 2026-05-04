@@ -1,51 +1,34 @@
-"""
-============================================================
-EDA COMPLET – Référendum "Vache à Cornes" 2018
-============================================================
-Script unique regroupant :
-  1.  Chargement & merge de tous les datasets
-  2.  Variable cible (Ja in Prozent) – scatter communes + distribution
-  3.  Valeurs manquantes après merge
-  4.  Corrélations (sans leakage)
-  5.  Détection d'anomalies et de patterns
-  6.  Rapport console récapitulatif
-
-Usage : python eda_complet.py
-============================================================
-"""
+# ________________________________________________________
+# Analyse et exploration des données (EDA) :
+#       - Importation des Dataset et fusion
+#       - Determination des outsiders avec methode IDR
+#       - Visualisation des naN dans les colones
+#       - calcul des correlation
+#       - analyse des patterns/anomalie
+# Dans le but de mieux visualiser ces différentes données, nous avons usé d'outils IA pour générer les Plots
+# ________________________________________________________
 
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
 from scipy.stats import pearsonr
-import warnings
 
-warnings.filterwarnings("ignore")
 
-DATA_DIR = "../Data_Sets/"
-TARGET   = "Ja in Prozent"
 
-# Colonnes de leakage : ce sont d'AUTRES résultats du MÊME référendum.
-# Les garder ferait "tricher" le modèle car elles permettent de recalculer
-# exactement la cible. On les retire avant toute analyse de corrélation.
 LEAKAGE_COLS = [
     'eingelegte Stimmzettel', 'Stimmbeteiligung', 'leere Stimmzettel',
     'ungültige Stimmzettel', 'gültige Stimmen', 'Ja-Stimmen', 'Nein-Stimmen',
 ]
-
-SEP = "=" * 65
-
-def section(title):
-    print(f"\n{SEP}\n  {title}\n{SEP}")
+TARGET = 'Ja in Prozent'
 
 
-#
-# 1.  CHARGEMENT & MERGE
-#
-section("1. CHARGEMENT & MERGE DES DATASETS")
+# ________________________________________________________
+# Chargement et Merge
+# ________________________________________________________
+print(f"___________________Chargement et merge___________________\n")
 
-def clean_id(df, col):
+def clean_and_format_id(df, col):
     """Convertit la colonne identifiant commune en string propre 'Id'."""
     df[col] = pd.to_numeric(df[col], errors='coerce')
     df = df.dropna(subset=[col]).copy()
@@ -53,25 +36,24 @@ def clean_id(df, col):
     return df
 
 # Train / Test
-train_df = pd.read_csv(DATA_DIR + "results_train.csv")
-test_df  = pd.read_csv(DATA_DIR + "results_test.csv")
+train_df = pd.read_csv("../Data_Sets/results_train.csv")
+test_df  = pd.read_csv("../Data_Sets/results_test.csv")
 train_df['Id'] = train_df['Gemeinde-Nummer'].astype(str)
 test_df['Id']  = test_df['Gemeinde-Nummer'].astype(str)
 
 # Référendum précédent (622)
 df_622 = pd.read_excel(
-    DATA_DIR + "622.00-result-by-canton-district-and-municipality.xlsx",
+    "../Data_Sets/622.00-result-by-canton-district-and-municipality.xlsx",
     sheet_name="Gemeinden", header=5)
 df_622.columns = df_622.columns.str.strip()
-df_622 = clean_id(df_622, 'Gemeinde-Nummer')
+df_622 = clean_and_format_id(df_622, 'Gemeinde-Nummer')
 df_622 = df_622.drop_duplicates(subset=['Id'])
 df_622 = df_622.add_suffix('_622').rename(columns={'Id_622': 'Id'})
 df_622 = df_622.drop(columns=['Gemeinde-Nummer_622', 'Gemeinde_622', 'Kanton_622'])
 
 # Portrait des communes (jee)
-df_jee = pd.read_excel(DATA_DIR + "je-e-21.03.01.xlsx",
-                       sheet_name="Schweiz - Gemeinden", header=5)
-df_jee = clean_id(df_jee, 'Number of commune')
+df_jee = pd.read_excel("../Data_Sets/je-e-21.03.01.xlsx", sheet_name="Schweiz - Gemeinden", header=5)
+df_jee = clean_and_format_id(df_jee, 'Number of commune')
 df_jee = df_jee.drop_duplicates(subset=['Id'])
 df_jee = df_jee.drop(columns=['Number of commune', 'Name of commune'])
 for col in df_jee.columns:
@@ -79,16 +61,14 @@ for col in df_jee.columns:
         df_jee[col] = pd.to_numeric(df_jee[col], errors='coerce')
 
 # Géodonnées
-df_geo = pd.read_csv(DATA_DIR + "swiss_communes_geodata.csv")
-df_geo = clean_id(df_geo, 'bfs_id')
+df_geo = pd.read_csv("../Data_Sets/swiss_communes_geodata.csv")
+df_geo = clean_and_format_id(df_geo, 'bfs_id')
 df_geo = df_geo.drop_duplicates(subset=['Id'])
 df_geo = df_geo.drop(columns=['bfs_id', 'municipalityLabel'])
 
 # Revenus
-df_income = pd.read_excel(
-    DATA_DIR + "statistik-dbst-np-kennzahlen-mit-2017-fr.xlsx",
-    sheet_name='Gemeinden - Communes')
-df_income = clean_id(df_income, 'gdenr')
+df_income = pd.read_excel("../Data_Sets/statistik-dbst-np-kennzahlen-mit-2017-fr.xlsx",sheet_name='Gemeinden - Communes')
+df_income = clean_and_format_id(df_income, 'gdenr')
 df_income = df_income.drop_duplicates(subset=['Id'])
 df_income = df_income.drop(columns=['ktname', 'gdename', 'Einheit'])
 df_income = df_income.add_suffix('_income').rename(columns={'Id_income': 'Id'})
@@ -97,15 +77,15 @@ for col in df_income.columns:
         df_income[col] = pd.to_numeric(df_income[col], errors='coerce')
 
 # Merge LEFT JOIN sur l'identifiant commune
-def do_merge(base):
-    return (base
-            .merge(df_622,    on='Id', how='left')
-            .merge(df_jee,    on='Id', how='left')
-            .merge(df_income, on='Id', how='left')
-            .merge(df_geo,    on='Id', how='left'))
 
-train_m = do_merge(train_df)
-test_m  = do_merge(test_df)
+train_m = (((train_df.merge(df_622,    on='Id', how='left')
+             .merge(df_jee,    on='Id', how='left'))
+            .merge(df_income, on='Id', how='left'))
+           .merge(df_geo,    on='Id', how='left'))
+test_m  = (((test_df.merge(df_622,    on='Id', how='left')
+             .merge(df_jee,    on='Id', how='left'))
+            .merge(df_income, on='Id', how='left'))
+           .merge(df_geo,    on='Id', how='left'))
 
 
 print(f"  train_merged : {train_m.shape[0]} lignes x {train_m.shape[1]} colonnes")
@@ -114,12 +94,13 @@ print(f"  Doublons Id train : {train_m['Id'].duplicated().sum()}")
 print(f"  Doublons Id test  : {test_m['Id'].duplicated().sum()}")
 
 
-#
-# 2.  VARIABLE CIBLE
-#
-section("2. VARIABLE CIBLE : Ja in Prozent")
+# ________________________________________________________
+# TARGET
+# ________________________________________________________
+print(f"___________________Target___________________\n")
 
-y = train_m[TARGET].dropna()
+
+y = train_m['Ja in Prozent'].dropna()
 
 # Statistiques descriptives
 print(f"\n  Nombre de communes (train) : {len(y)}")
@@ -129,35 +110,36 @@ print(f"  Moyenne   : {y.mean():.2f}%")
 print(f"  Mediane   : {y.median():.2f}%")
 print(f"  Ecart-type: {y.std():.2f}")
 
+
+# ________________________________________________________
+# Analyse des Outliers
+# ________________________________________________________
+print(f"___________________Outliers___________________\n")
+
 # Outliers (méthode IQR)
-# L'IQR (Interquartile Range) est la distance entre le 1er quartile (Q1=25%)
-# et le 3e quartile (Q3=75%). C'est une mesure robuste de la dispersion.
-# Un point est considéré outlier s'il est EN DEHORS de la "cloture" :
-#   borne basse = Q1 - 1.5 x IQR
-#   borne haute = Q3 + 1.5 x IQR
-# Ce sont exactement les moustaches du boxplot.
+# L'IQR est une mesure robuste de la dispersion.
+# Un point est considéré outlier s'il est en dehors de [inf, sup] :
 Q1, Q3 = y.quantile(0.25), y.quantile(0.75)
-IQR    = Q3 - Q1
-lo     = Q1 - 1.5 * IQR
-hi     = Q3 + 1.5 * IQR
+IQR = Q3 - Q1
+lo = Q1 - 1.5 * IQR
+hi = Q3 + 1.5 * IQR
 
 outliers = train_m[(train_m[TARGET] < lo) | (train_m[TARGET] > hi)].copy()
 
 print(f"\n  Outliers IQR :")
-print(f"    Q1 = {Q1:.2f}%  |  Q3 = {Q3:.2f}%  |  IQR = {IQR:.2f}")
-print(f"    Borne basse = Q1 - 1.5 x IQR = {lo:.2f}%")
-print(f"    Borne haute = Q3 + 1.5 x IQR = {hi:.2f}%")
-print(f"    -> {len(outliers)} communes outliers ({len(outliers)/len(y)*100:.1f}%)")
+print(f" Q1 = {Q1:.2f}%  |  Q3 = {Q3:.2f}%  |  IQR = {IQR:.2f}")
+print(f" Borne basse = Q1 - 1.5 x IQR = {lo:.2f}%")
+print(f" Borne haute = Q3 + 1.5 x IQR = {hi:.2f}%")
+print(f" -> {len(outliers)} communes outliers ({len(outliers)/len(y)*100:.1f}%)")
 
 
 if len(outliers):
-    print(f"\n  Communes outliers (triees par % OUI) :")
+    print(f"\n Communes outliers (triees par % OUI) :")
     print(outliers[["Gemeinde", TARGET]].sort_values(TARGET).to_string(index=False))
 
-# ── Figure 1 : Scatter – numéro de commune vs % de OUI ──────────────────────
-# On garde le numero de commune sur l'axe X (ordre original, non trie) pour
-# pouvoir identifier quelle commune correspond a quel pourcentage.
-# Les outliers IQR sont mis en evidence en rouge.
+# ________________________________________________________
+# Figure 1 : Scatter – numéro de commune vs % de OUI
+# numero de commune sur X, outliers en rouge
 fig, ax = plt.subplots(figsize=(14, 5))
 
 normal_mask = (train_m[TARGET] >= lo) & (train_m[TARGET] <= hi) & train_m[TARGET].notna()
@@ -187,6 +169,7 @@ plt.tight_layout()
 plt.savefig("eda_fig_01_communes_scatter.png", dpi=150)
 plt.show()
 
+# ________________________________________________________
 # Figure 2 : Histogramme + Boxplot
 fig, axes = plt.subplots(1, 2, figsize=(12, 4))
 fig.suptitle("Distribution de 'Ja in Prozent'", fontsize=13, fontweight='bold')
@@ -201,8 +184,6 @@ axes[0].set_ylabel("Nombre de communes")
 axes[0].set_title("Histogramme")
 axes[0].legend()
 
-# Les moustaches du boxplot correspondent exactement aux bornes IQR calculees
-# ci-dessus. Les points hors moustaches sont les memes outliers (rouge Fig.1).
 axes[1].boxplot(y, vert=True, patch_artist=True,
                 boxprops=dict(facecolor='#3498db', alpha=0.5),
                 medianprops=dict(color='red', linewidth=2),
@@ -217,10 +198,10 @@ plt.show()
 print("  -> Figure 2 sauvegardee : eda_fig_02_distribution.png")
 
 
-#
-# 3.  VALEURS MANQUANTES APRÈS MERGE
-#
-section("3. VALEURS MANQUANTES APRES MERGE")
+# ________________________________________________________
+# Analyse des NaN apres fusion
+# ________________________________________________________
+print(f"___________________Analyse des NaN___________________\n")
 
 # Apres un LEFT JOIN, une commune sans correspondance dans un dataset secondaire
 # aura des NaN pour TOUTES les colonnes de ce dataset.
@@ -228,10 +209,10 @@ miss_pct     = (train_m.isnull().mean() * 100).sort_values(ascending=False)
 miss_nonzero = miss_pct[miss_pct > 0]
 
 print(f"\n  Colonnes sans NaN   : {(miss_pct == 0).sum()} / {len(miss_pct)}")
-print(f"  Colonnes avec NaN   : {len(miss_nonzero)}")
-print(f"  Dont > 50% manquant : {(miss_nonzero > 50).sum()}")
-print(f"  Dont > 20% manquant : {(miss_nonzero > 20).sum()}")
-print(f"\n  Top 25 colonnes les plus incompletes :")
+print(f" Colonnes avec NaN   : {len(miss_nonzero)}")
+print(f" Dont > 50% manquant : {(miss_nonzero > 50).sum()}")
+print(f" Dont > 20% manquant : {(miss_nonzero > 20).sum()}")
+print(f"\n Top 25 colonnes les plus incompletes :")
 print(miss_nonzero.head(25).round(1).to_string())
 
 # Communes non matchees par source
@@ -246,7 +227,8 @@ if geo_present:
     n = train_m[geo_present].isnull().all(axis=1).sum()
     print(f"    {'geo':10s} : {n} communes ({n/len(train_m)*100:.1f}%)")
 
-# Figure 3 : Barplot horizontal des NaN
+# ________________________________________________________
+#  Figure 3 : Barplot horizontal des NaN
 if len(miss_nonzero) > 0:
     fig, ax = plt.subplots(figsize=(10, max(5, len(miss_nonzero) * 0.22)))
     colors_m = ['#e74c3c' if v > 50 else '#f39c12' if v > 20 else '#3498db'
@@ -263,10 +245,11 @@ if len(miss_nonzero) > 0:
     plt.show()
 
 
-#
-# 4.  CORRÉLATIONS SANS LEAKAGE
-#
-section("4. CORRELATIONS AVEC LA CIBLE")
+# ________________________________________________________
+# Correlation sans leakage
+# ________________________________________________________
+print(f"___________________Correlation___________________\n")
+
 
 # On retire les colonnes de leakage + la cible elle-meme,
 # puis on ne garde que les colonnes numeriques.
@@ -312,7 +295,8 @@ if len(strong_df):
 corr_df.to_csv("eda_table_correlations.csv", index=False)
 print("\n  -> Tableau sauvegarde : eda_table_correlations.csv")
 
-# Figure 4 : Barplot top 30 corrélations
+# ________________________________________________________
+#  Figure 4 : Barplot top 30 corrélations
 top30    = corr_df.head(30).copy()
 colors_c = ['#2ecc71' if r > 0 else '#e74c3c' for r in top30['r']]
 
@@ -331,7 +315,8 @@ plt.savefig("eda_fig_04_correlations.png", dpi=150)
 plt.show()
 print("\n  -> Figure 4 sauvegardee : eda_fig_04_correlations.png")
 
-# Figure 5 : Scatter plots top 6 features
+# ________________________________________________________
+#  Figure 5 : Scatter plots top 6 features
 top6 = corr_df.head(6)['feature'].tolist()
 
 fig, axes = plt.subplots(2, 3, figsize=(14, 8))
@@ -343,7 +328,6 @@ for ax, col in zip(axes.flat, top6):
     r_val  = corr_df.loc[corr_df['feature'] == col, 'r'].values[0]
 
     ax.scatter(x_col[valid], y_train[valid], alpha=0.3, s=8, color='#3498db')
-    # Droite de regression (tendance lineaire)
     z = np.polyfit(x_col[valid], y_train[valid], 1)
     xline = np.linspace(x_col[valid].min(), x_col[valid].max(), 100)
     ax.plot(xline, np.poly1d(z)(xline), color='red', linewidth=1.5)
@@ -358,12 +342,13 @@ plt.show()
 print("  -> Figure 5 sauvegardee : eda_fig_05_scatter_top6.png")
 
 
-#
-# 5.  PATTERNS & ANOMALIES
-#
-section("5. PATTERNS & ANOMALIES")
 
-#5a. Analyse par canton
+# ________________________________________________________
+# Analyse de Pattern
+# ________________________________________________________
+print(f"___________________Analyse Pattern___________________\n")
+
+#Analyse par canton
 canton_col ="Kanton"
 
 print(f"\n  [5a] Analyse par canton (colonne : '{canton_col}')")
@@ -375,6 +360,8 @@ print(f"\n  -> Canton le plus OUI  : {stats_c.index[0]}  ({stats_c['Moyenne'].il
 print(f"  -> Canton le moins OUI : {stats_c.index[-1]}  ({stats_c['Moyenne'].iloc[-1]:.1f}%)")
 print(f"  -> Ecart entre cantons : {stats_c['Moyenne'].max() - stats_c['Moyenne'].min():.1f} points")
 
+# ________________________________________________________
+# Figure 6
 fig, ax = plt.subplots(figsize=(14, 5))
 order = stats_c.index.tolist()
 sns.boxplot(data=train_m, x=canton_col, y=TARGET, order=order, palette='viridis', ax=ax)
@@ -388,11 +375,10 @@ plt.show()
 print("\n  -> Figure 6 sauvegardee : eda_fig_06_canton.png")
 
 
-# ── 5b. Multicolinéarité entre les top features ──────────────────────────────
+# Multicolinéarité entre les top features
 # Si deux features sont tres correlees entre elles (|r| > 0.8), elles apportent
-# la meme information. En garder les deux n'aide pas le modele et peut le
-# perturber. On les detecte pour decider laquelle garder.
-print(f"\n  [5b] Multicolinearite – paires de features avec |r| > 0.8")
+# la meme information.
+print(f"\n Multicolinearite – paires de features avec |r| > 0.8")
 
 #on verifie que les variables les plus corrélées avec le target ne se repettent pas
 top15_feat = [f for f in corr_df.head(15)['feature'] if f in train_m.columns]
@@ -403,16 +389,16 @@ pairs_found = False
 
 cols_ = corr_matrix.columns.tolist()
 
-"""
-On fais une double boucle afin de comparé entre elle les features du top 15 de celles les plus 
-corrélée avec la target.
-On verifie A <-> B mais on evite B <-> car la correlation serait la même
-On ne verifie pas A <-> A car ça vaut toujours 1 
-"""
+
+# On fait une double boucle afin de comparer entre elle les features du top 15 de celles le plus corrélé
+# avec la target.
+# On vérifie A <-> B, mais on évite B <-> car la correlation serait la même
+# On ne verifie pas A <-> A, parce que ça vaut toujours 1.
+
 for i in range(len(cols_)):
     for j in range(i + 1, len(cols_)):
         c = corr_matrix.iloc[i, j]
         if abs(c) > 0.8:
-            print(f"    {cols_[i][:35]} <-> {cols_[j][:35]:35s}  r = {c:.3f}")
+            print(f"{cols_[i][:35]} <-> {cols_[j][:35]:35s} r = {c:.3f}")
             pairs_found = True
 
