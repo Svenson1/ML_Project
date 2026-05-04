@@ -1,0 +1,290 @@
+import pandas as pd
+import numpy as np
+from sklearn.feature_selection import SelectKBest, f_regression, mutual_info_regression
+from sklearn.impute import SimpleImputer
+from sklearn.model_selection import cross_val_predict, cross_val_score, GridSearchCV, RandomizedSearchCV
+from sklearn.neural_network import MLPRegressor
+from sklearn.pipeline import Pipeline
+from sklearn.preprocessing import StandardScaler
+
+
+
+# ________________________________________________________
+# Chargement des Dataset
+# ________________________________________________________
+
+#fonction :
+def clean_and_format_id(df, column_name):
+    """
+    :param df: The initial DataFrame
+    :param column_name: The name of the column
+    :return: the cleaned DataFrame with the format ID
+    """
+    # 1. Conversion en numérique (force les erreurs en NaN)
+    df[column_name] = pd.to_numeric(df[column_name], errors='coerce')
+    # 2. Suppression des lignes où le numéro de commune est invalide (NaN)
+    df = df.dropna(subset=[column_name]).copy()
+    # 3. Création de la colonne 'Id' (passage par int pour retirer le .0 si c'est du float, puis str)
+    df['Id'] = df[column_name].astype(int).astype(str)
+    return df
+
+
+#training and test set :
+train_df = pd.read_csv("../Data_Sets/results_train.csv")
+test_df = pd.read_csv("../Data_Sets/results_test.csv")
+train_df['Id'] = train_df['Gemeinde-Nummer'].astype(str)# On ajoute une colone id qui est egale au numero de commune
+test_df['Id'] = test_df['Gemeinde-Nummer'].astype(str)
+train_df = train_df.drop(columns=['Gemeinde-Nummer'])
+test_df = test_df.drop(columns=['Gemeinde-Nummer'])
+
+
+#Other referundum = 622
+file_622 = "../Data_Sets/622.00-result-by-canton-district-and-municipality.xlsx"
+df_622 = pd.read_excel(file_622, sheet_name="Gemeinden", header=5)
+df_622.columns = df_622.columns.str.strip()
+df_622 = clean_and_format_id(df_622, 'Gemeinde-Nummer')
+df_622 = df_622.drop_duplicates(subset=['Id'])
+df_622 = df_622.add_suffix('_622')
+df_622 = df_622.rename(columns={'Id_622': 'Id'}) # pour la fusion apres
+df_622 = df_622.drop(columns=['Gemeinde-Nummer_622', 'Gemeinde_622', 'Kanton_622'])
+
+
+#portrait of communes = jee
+file_jee = "../Data_Sets/je-e-21.03.01.xlsx"
+df_jee = pd.read_excel(file_jee, sheet_name="Schweiz - Gemeinden", header=5)
+df_jee = clean_and_format_id(df_jee, 'Number of commune')
+df_jee = df_jee.drop_duplicates(subset=['Id'])
+df_jee = df_jee.drop(columns=['Number of commune', 'Name of commune'])
+# On force les cols a être des chiffres :
+for col in df_jee.columns:
+    if col != 'Id':
+        df_jee[col] = pd.to_numeric(df_jee[col], errors='coerce')
+
+
+#geoData
+file_geo = "../Data_Sets/swiss_communes_geodata.csv"
+df_geo = pd.read_csv(file_geo)
+df_geo = clean_and_format_id(df_geo, 'bfs_id')
+df_geo = df_geo.drop_duplicates(subset=['Id'])
+df_geo = df_geo.drop(columns=['bfs_id', 'municipalityLabel'])
+
+
+
+#income data for each Swiss com-mune in 2017
+file_income = "../Data_Sets/statistik-dbst-np-kennzahlen-mit-2017-fr.xlsx"
+df_income = pd.read_excel(file_income,sheet_name='Gemeinden - Communes')
+df_income = clean_and_format_id(df_income, 'gdenr')
+df_income = df_income.drop_duplicates(subset=['Id'])
+df_income = df_income.drop(columns=['ktname', 'gdename', 'Einheit'])
+df_income = df_income.add_suffix('_income')
+df_income = df_income.rename(columns={'Id_income': 'Id'})
+# On force les cols a être des chiffres :
+for col in df_income.columns:
+    if col != 'Id':
+        df_income[col] = pd.to_numeric(df_income[col], errors='coerce')
+
+
+
+# ________________________________________________________
+# Merge Datasets
+# ________________________________________________________
+
+train_merged = (train_df.merge(df_622, on='Id', how='left')
+                .merge(df_jee, on='Id', how='left')
+                .merge(df_income, on='Id', how='left')
+                .merge(df_geo, on='Id', how='left'))
+
+test_merged = (test_df.merge(df_622, on='Id', how='left')
+               .merge(df_jee, on='Id', how='left')
+               .merge(df_income, on='Id', how='left')
+               .merge(df_geo, on='Id', how='left'))
+
+print(f"Doublons dans train_merged : {train_merged['Id'].duplicated().sum()}")
+print(f"Doublons dans test_merged  : {test_merged['Id'].duplicated().sum()}")
+
+
+
+# ________________________________________________________
+# Modifications Dataset après analyse
+# ________________________________________________________
+#on supprime car >50% de nan
+train_merged = train_merged.drop(columns=['PdA/Sol.'])
+test_merged = test_merged.drop(columns=['PdA/Sol.'])
+
+#on supprime car colinéarité :
+train_merged = train_merged.drop(columns=['Settlement and urban area in %'])
+test_merged = test_merged.drop(columns=['Settlement and urban area in %'])
+
+# Colonnes identifiants income sans valeur prédictive
+train_merged = train_merged.drop(columns=['gdenr_income', 'ktnr_income'], errors='ignore')
+test_merged  = test_merged.drop(columns=['gdenr_income', 'ktnr_income'],  errors='ignore')
+
+# gestion des partis politique en nan, nan = parti absent donc valeur = 0
+party_cols = ['SVP', 'SP', 'GPS', 'CVP', 'FDP/PLR 2)', 'GLP', 'BDP',
+              'EVP/CSP', 'Small right-wing parties']
+for col in party_cols:
+    if col in train_merged.columns:
+        train_merged[col] = train_merged[col].fillna(0)
+        test_merged[col]  = test_merged[col].fillna(0)
+
+
+
+# ________________________________________________________
+# Target
+# ________________________________________________________
+# Define target variable
+y_train = train_merged['Ja in Prozent']
+#on encode les Kantons avec one hot :
+dummies_train = pd.get_dummies(train_merged['Kantons-Nummer'], prefix='canton',
+    drop_first=True,
+    dtype=int )
+dummies_test  = pd.get_dummies(test_merged['Kantons-Nummer'], prefix='canton',
+    drop_first=True,
+    dtype=int)
+
+# aligner les colonnes
+dummies_train, dummies_test = dummies_train.align(dummies_test, join='left', axis=1, fill_value=0)
+
+train_merged = pd.concat([train_merged, dummies_train], axis=1)
+test_merged  = pd.concat([test_merged, dummies_test], axis=1)
+
+train_merged = train_merged.drop(columns=['Kantons-Nummer'])
+test_merged = test_merged.drop(columns=['Kantons-Nummer'])
+
+
+
+# ________________________________________________________
+# Selection Des Features
+# ________________________________________________________
+
+leakage_columns = [
+    'eingelegte Stimmzettel', 'Stimmbeteiligung', 'leere Stimmzettel',
+    'ungültige Stimmzettel', 'gültige Stimmen', 'Ja-Stimmen', 'Nein-Stimmen', 'Ja in Prozent'
+]
+
+# Selection uniquement des colones numériques et on retire le résulat du vote
+X_train_raw = train_merged.select_dtypes(include=[np.number]).drop(columns=[c for c in leakage_columns if c in train_merged.columns])
+
+# S'assurer que le test a les mêmes features
+X_test_raw = test_merged[X_train_raw.columns]
+
+print(f"Features : {X_train_raw.shape[1]} colonnes")
+print(f"NaN dans X_train : {X_train_raw.isna().sum().sum()}")
+print(f"Train: {X_train_raw.shape} | Test: {X_test_raw.shape}")
+
+
+
+# ________________________________________________________
+# Pipeline MLP
+# ________________________________________________________
+
+# Impute missing values (replace NaNs with mean of the column)
+#scaler obligatoire pour mlp
+pipeline = Pipeline([
+    ('imputer',  SimpleImputer(strategy='median')),
+    ('scaler',   StandardScaler()),
+    ('selector', SelectKBest(score_func=mutual_info_regression)),
+    ('mlp',      MLPRegressor(
+        max_iter=3000,
+        random_state=42,
+        early_stopping=True,
+        validation_fraction=0.1,
+        n_iter_no_change=10,
+    )),
+])
+
+
+
+# ________________________________________________________
+# Eval avec grid_search
+# ________________________________________________________
+param_grid = {
+    # Feature selection
+    'selector__k': [50,60,70,80,'all'],
+    # Architecture du réseau
+    'mlp__hidden_layer_sizes': [
+        (128,),
+        (256,),
+        (128, 64),
+        (256, 128),
+        (256, 128, 64),
+    ],
+    # Activation
+    'mlp__activation': ['tanh'],
+    'mlp__solver': ['adam'],
+     # Régularisation
+    'mlp__alpha': [
+        1e-5,
+        1e-4,
+        1e-3,
+        1e-2,
+        1e-1
+    ],
+    # Learning rate
+    'mlp__learning_rate_init': [
+        0.0005,
+        0.001,
+        0.002
+    ],
+    # Batch size
+    'mlp__batch_size': [
+        32,
+        64,
+        128
+    ],
+}
+
+
+grid_search = RandomizedSearchCV(
+    pipeline,
+    param_distributions=param_grid,
+    n_iter=100,
+    cv=9,
+    scoring='neg_root_mean_squared_error',
+    n_jobs=-1,
+    random_state=42,
+    verbose=2,
+)
+grid_search.fit(X_train_raw, y_train)
+
+print(f"\nMeilleurs paramètres : {grid_search.best_params_}")
+print(f"Meilleur RMSE CV    : {-grid_search.best_score_:.3f}")
+
+# Afficher le top 5 des configurations
+results = pd.DataFrame(grid_search.cv_results_)
+results = results.sort_values('rank_test_score')
+top5 = results[['params', 'mean_test_score', 'std_test_score']].head(5).copy()
+top5['RMSE'] = -top5['mean_test_score']
+top5['std']  =  top5['std_test_score']
+print("\nTop 5 configurations :")
+print(top5[['params', 'RMSE', 'std']].to_string(index=False))
+
+
+
+# ________________________________________________________
+# Features Sélectionnées
+# ________________________________________________________
+# Le best_estimator_ est déjà fitté sur tout X_train_raw
+best_pipeline = grid_search.best_estimator_
+selector      = best_pipeline.named_steps['selector']
+k             = grid_search.best_params_['selector__k']
+
+if k != 'all':
+    selected = X_train_raw.columns[selector.get_support()].tolist()
+    scores   = selector.scores_[selector.get_support()]
+    feat_df  = pd.DataFrame({'feature': selected, 'score': scores})
+    feat_df  = feat_df.sort_values('score', ascending=False)
+    print(feat_df.to_string(index=False))
+
+# ________________________________________________________
+# Soumission
+# ________________________________________________________
+predictions = np.clip(best_pipeline.predict(X_test_raw), 0, 100) #on clip pour rester entre 0-100
+submission = pd.DataFrame({
+    'Id': test_merged['Id'],
+    'Predicted': predictions
+})
+submission.to_csv('submission_mlp.csv', index=False)
+print("Submission sauvegardée.")
+
+print(submission.head())
