@@ -1,5 +1,6 @@
 import pandas as pd
 import numpy as np
+np.random.seed(42)
 from sklearn.ensemble import BaggingRegressor
 from sklearn.feature_selection import SelectKBest, f_regression, mutual_info_regression
 from sklearn.impute import SimpleImputer
@@ -186,7 +187,7 @@ print(f"Train: {X_train_raw.shape} | Test: {X_test_raw.shape}")
 pipeline_for_bagging = Pipeline([
     ('imputer',  SimpleImputer(strategy='median')),
     ('scaler',   StandardScaler()),
-    ('selector', SelectKBest(score_func=mutual_info_regression, k=80)),
+    ('selector', SelectKBest(score_func=lambda X, y: mutual_info_regression(X, y, random_state=42), k=80)),
     ('mlp',      MLPRegressor(
         hidden_layer_sizes=(128,),
         activation='tanh',
@@ -214,7 +215,7 @@ bagged_model = BaggingRegressor(
     max_samples=0.85,
     bootstrap=True,
     random_state=42,
-    n_jobs=-1,
+    n_jobs=1,
     verbose=1,
 )
 

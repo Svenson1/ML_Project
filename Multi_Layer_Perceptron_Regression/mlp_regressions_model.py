@@ -1,5 +1,6 @@
 import pandas as pd
 import numpy as np
+np.random.seed(42)
 from sklearn.feature_selection import SelectKBest, f_regression, mutual_info_regression
 from sklearn.impute import SimpleImputer
 from sklearn.model_selection import cross_val_predict, cross_val_score, GridSearchCV, RandomizedSearchCV
@@ -183,7 +184,7 @@ print(f"Train: {X_train_raw.shape} | Test: {X_test_raw.shape}")
 pipeline = Pipeline([
     ('imputer',  SimpleImputer(strategy='median')),
     ('scaler',   StandardScaler()),
-    ('selector', SelectKBest(score_func=mutual_info_regression)),
+    ('selector', SelectKBest(score_func=lambda X, y: mutual_info_regression(X, y, random_state=42))),
     ('mlp',      MLPRegressor(
         max_iter=4000,
         random_state=42,
@@ -238,7 +239,7 @@ grid_search = RandomizedSearchCV(
     n_iter=100,
     cv=5,
     scoring='neg_root_mean_squared_error',
-    n_jobs=-1,
+    n_jobs=1,
     random_state=42,
     verbose=2,
 )
