@@ -65,10 +65,7 @@ print(f"Train: {X_train_raw.shape} | Test: {X_test_raw.shape}")
 # ________________________________________________________
 # Pipeline avec les meilleurs paramètres connus
 # ________________________________________________________
-# Meilleurs paramètres issus du grid search précédent :
-# rank 3 — meilleur compromis RMSE/std :
-# selector__k=80, hidden_layer_sizes=(128,), alpha=5,
-# learning_rate_init=0.0005, batch_size=32
+# Meilleurs paramètres issus du grid search précédent
 
 pipeline_for_bagging = Pipeline([
     ('imputer',  SimpleImputer(strategy='median')),
