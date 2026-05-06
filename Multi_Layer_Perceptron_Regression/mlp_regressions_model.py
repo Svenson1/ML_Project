@@ -29,14 +29,14 @@ print(f"Doublons dans test_merged  : {test_merged['Id'].duplicated().sum()}")
 # Modifications Dataset après analyse
 # ________________________________________________________
 
-train_merged = change_train_dataset(train_merged)
+train_merged, test_merged = change_train_dataset(train_merged, test_merged)
 
 
 
 # ________________________________________________________
 # Target
 # ________________________________________________________
-y_train, train_merged, test_merged = create_target(train_merged)
+y_train, train_merged, test_merged = create_target(train_merged, test_merged)
 
 
 
