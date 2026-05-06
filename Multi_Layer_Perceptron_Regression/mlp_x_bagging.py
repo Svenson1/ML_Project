@@ -118,7 +118,7 @@ cv_scores = cross_val_score(
     X_train_raw, y_train,
     cv=13,
     scoring='neg_root_mean_squared_error',
-    n_jobs=1,  # ← 1 car bagged_model est déjà parallèle
+    n_jobs=1,  # <- 1 car bagged_model est déjà parallèle
 )
 
 rmse_scores = -cv_scores
