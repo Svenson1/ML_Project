@@ -187,13 +187,13 @@ print(f"Train: {X_train_raw.shape} | Test: {X_test_raw.shape}")
 pipeline_for_bagging = Pipeline([
     ('imputer',  SimpleImputer(strategy='median')),
     ('scaler',   StandardScaler()),
-    ('selector', SelectKBest(score_func=lambda X, y: mutual_info_regression(X, y, random_state=42), k=80)),
+    ('selector', SelectKBest(score_func=lambda X, y: mutual_info_regression(X, y, random_state=42), k='all')),
     ('mlp',      MLPRegressor(
-        hidden_layer_sizes=(128,),
+        hidden_layer_sizes=(256,),
         activation='tanh',
         solver='adam',
         alpha=5,
-        learning_rate_init=0.0005,
+        learning_rate_init=0.001,
         batch_size=32,
         max_iter=4000,
         early_stopping=True,
@@ -223,6 +223,21 @@ print("\nEntraînement du BaggingRegressor (25 estimateurs)...")
 bagged_model.fit(X_train_raw, y_train)
 print("Bagging terminé.")
 
+# ________________________________________________________
+# Evaluation CV locale
+# ________________________________________________________
+
+cv_scores = cross_val_score(
+    bagged_model,
+    X_train_raw, y_train,
+    cv=13,
+    scoring='neg_root_mean_squared_error',
+    n_jobs=1,  # ← 1 car bagged_model est déjà parallèle
+)
+
+rmse_scores = -cv_scores
+print(f"\nRMSE CV moyen : {rmse_scores.mean():.3f}")
+print(f"Std CV        : {rmse_scores.std():.3f}")
 
 
 # ________________________________________________________
