@@ -128,9 +128,9 @@ grid_search = RandomizedSearchCV(
     pipeline,
     param_distributions=param_grid,
     n_iter=100,
-    cv=5,
+    cv=13,
     scoring='neg_root_mean_squared_error',
-    n_jobs=1,
+    n_jobs=-1,
     random_state=42,
     verbose=2,
 )
