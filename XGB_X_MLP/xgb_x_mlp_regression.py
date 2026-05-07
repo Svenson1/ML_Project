@@ -212,6 +212,6 @@ submission = pd.DataFrame({
     'Id':        test_merged['Id'],
     'Predicted': predictions
 })
-submission.to_csv(f'submission_{best_label}_final.csv', index=False)
-print(f"Submission sauvegardée : submission_{best_label}_final.csv")
+submission.to_csv(f'submission_ensemble_final.csv', index=False)
+print(f"Submission sauvegardée : submission_ensemble_final.csv")
 print(submission.head())
