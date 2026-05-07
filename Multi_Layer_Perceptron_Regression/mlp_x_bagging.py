@@ -131,7 +131,7 @@ submission = pd.DataFrame({
     'Id': test_merged['Id'],
     'Predicted': predictions
 })
-submission.to_csv('submission_mlp_test.csv', index=False)
+submission.to_csv('submission_mlp_bagging.csv', index=False)
 print("Submission sauvegardée.")
 print(submission.head())
 
